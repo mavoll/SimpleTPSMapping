@@ -22,7 +22,7 @@ We will also present an more precise approach using official Ground Control Poin
 - Python 3.6
 - OpenCV 3.4
 
-### Install Anaconda: ###
+### Install: ###
 
 ## Usage: ##
 
