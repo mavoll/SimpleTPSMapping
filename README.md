@@ -12,7 +12,7 @@ We will also present an more precise approach using official Ground Control Poin
 ## Further development and research opportunities
 
 * Add more tools to fine tune the transformation matrix manually to get better results.
-* Are there better TPS implementations or even better transformation methods than OpenCVs ThinPlateSplineShapeTransformer.
+* Are better TPS implementations than OpenCVs ThinPlateSplineShapeTransformer available or do exist better transformation methods than TPS to do the job?
 * Investigate and test more sophisticated methods to automize or semi-automize the process of keypoint selection as well as to get better mapping results.
   * Keyword: Shape Context Matching
 
