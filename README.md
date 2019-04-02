@@ -26,6 +26,10 @@ We will also present an more precise approach using official Ground Control Poin
 
 ## Usage: ##
 
+<p align="center">
+  <img src="/images/gui.png" width="800" align="middle">
+</p>
+
 ## Authors
 
 * **Marc-André Vollstedt** - marc.vollstedt@gmail.com
