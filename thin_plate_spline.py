@@ -1,44 +1,16 @@
-import collections
-from collections import deque
-import colorsys
-import csv
 import cv2
-from datetime import datetime
-from datetime import timedelta
 import imutils
 from threading import Thread
-import time
-import math
 
 import numpy as np
-#import matplotlib
-#matplotlib.use("TkAgg")
-#from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-#from matplotlib.figure import Figure
-from openpyxl import load_workbook
-import os.path as path
-import pandas as pd
 import sys
-from tkinter import BOTH
 from tkinter import Button
-from tkinter import Checkbutton
-from tkinter import END
-from tkinter import Entry
 from tkinter.filedialog import askopenfilename
-from tkinter.filedialog import askopenfilenames
 from tkinter.filedialog import asksaveasfilename
-from tkinter import IntVar
 from tkinter import Label
-from tkinter import LEFT
 from tkinter import messagebox
-from tkinter import RIGHT
-from tkinter import Scrollbar
-from tkinter import Text
 from tkinter import Tk
-from tkinter import Toplevel
 from tkinter import ttk
-from tkinter import Y
-from tkinter import W
 
 class App(object):
   
@@ -126,31 +98,32 @@ class App(object):
 
         filename = askopenfilename(**options)
 
-        if filename:              
+        if filename:
+            
             self.image = cv2.imread(filename)
             h = int(self.image.shape[0] * self.scale_factor)
             w = int(self.image.shape[1] * self.scale_factor)
             self.image = cv2.resize(self.image, (w, h))
             self.clone = self.image.copy()
+        
+            self.pixel_points = []
+            self.fix_points = []
+            self.num_selected_points = 0
+            self.refPt = []
+            self.inter_line_counter = 0
             
-            if self.open_ref_image():
+            self.alpha = 0.5
+            self.rotate_grade = 0
+            self.scale_width = 100
             
-                self.pixel_points = []
-                self.fix_points = []
-                self.num_selected_points = 0
-                self.refPt = []
-                self.inter_line_counter = 0
-                
-                self.alpha = 0.5
-                self.rotate_grade = 0
-                self.scale_width = 100
-                self.move_x = 0
-                self.move_y = 0
-                
-                if self.opencv_thread is None:
-                    self.opencv_thread = Thread(target=self.show_image)
-                    self.opencv_thread.daemon = True
-                    self.opencv_thread.start()
+            self.open_ref_image()
+            
+            if self.opencv_thread is None:
+                self.opencv_thread = Thread(target=self.show_image)
+                self.opencv_thread.daemon = True
+                self.opencv_thread.start()
+            else:
+                self.draw()
 
     def open_ref_image(self):
 
@@ -163,15 +136,22 @@ class App(object):
 
         if filename:
              
-            self.ref_image = cv2.imread(filename, -1)
+            self.ref_image = cv2.imread(filename, -1)            
             h = int(self.ref_image.shape[0] * self.scale_factor)
             w = int(self.ref_image.shape[1] * self.scale_factor)
+            
             self.ref_image = cv2.resize(self.ref_image, (w, h))
             
-            return True
-        
-        else:
-            return False
+            d_h = self.image.shape[0] - h
+            d_w = self.image.shape[1] - w
+                
+            if (d_h > d_w and d_h > 0) or (d_h > d_w and d_h <= 0):
+                self.ref_image = imutils.resize(self.ref_image, width=self.image.shape[1])
+            else:
+                self.ref_image = imutils.resize(self.ref_image, height=self.image.shape[0])
+            
+            self.move_x = int(self.ref_image.shape[1] / 2)
+            self.move_y = int(self.ref_image.shape[0] / 2)
 
     def show_image(self):
 
@@ -199,15 +179,14 @@ class App(object):
                 cv2.createTrackbar(trackbar_name3, 'image' , self.rotate_grade, 360, self.on_trackbar_rotate)
 
                 trackbar_name4 = 'Move x %d' % 100
-                cv2.createTrackbar(trackbar_name4, 'image' , self.move_x, 2000, self.on_trackbar_move_x)
+                cv2.createTrackbar(trackbar_name4, 'image' , self.move_x, self.ref_image.shape[1], self.on_trackbar_move_x)
                 
                 trackbar_name5 = 'Move y %d' % 100
-                cv2.createTrackbar(trackbar_name5, 'image' , self.move_y, 1000, self.on_trackbar_move_y)                                   
+                cv2.createTrackbar(trackbar_name5, 'image' , self.move_y, self.ref_image.shape[0], self.on_trackbar_move_y)                                   
                 
                 self.draw()
                 
-                cv2.waitKey(0)
-                
+                cv2.waitKey(0)                
 
             except Exception:
 
@@ -227,9 +206,10 @@ class App(object):
         elif event == cv2.EVENT_LBUTTONUP:
             if self.refPt[-1] != (x, y):
                 self.refPt.append((x, y))
-                image = self.put_points_and_line_on_image(self.image,
+                self.image = self.put_points_and_line_on_image(self.image,
                     self.refPt[self.inter_line_counter], self.refPt[self.inter_line_counter + 1])
-                cv2.imshow("image", image)
+                #cv2.imshow("image", image)
+                self.draw()
                 self.pixel_points.append(self.refPt[self.inter_line_counter])
                 self.fix_points.append(self.refPt[self.inter_line_counter + 1])
                 self.inter_line_counter += 2
@@ -309,12 +289,12 @@ class App(object):
         else:
             messagebox.showinfo("No image selected", "Please select an image first!")
 
-    def draw(self):
+    def draw(self):        
         
         w = int(round(self.ref_image.shape[1] * (self.scale_width / 100), 0))
         ref_image = imutils.resize(self.ref_image, w)
         ref_image = imutils.rotate(ref_image, angle=int(self.rotate_grade))                    
-        image = App.overlay_transparent(self.clone, ref_image, self.move_x, self.move_y, alpha=self.alpha)        
+        image = App.overlay_transparent(self.image, ref_image, self.move_x - int(ref_image.shape[1] / 2), self.move_y - int(ref_image.shape[0] / 2), alpha=self.alpha)        
                             
         cv2.imshow("image", image)
 
@@ -324,9 +304,34 @@ class App(object):
         overlay = background_img.copy()
                 
         ho, wo, _ = output.shape
-        h, w, _ = img_to_overlay_t.shape
+        h, w, _ = img_to_overlay_t.shape  
+        
+        x3 = 0
+        y3 = 0
+         
+        x2 = w + x
+        
+        if x2 >= wo:
+            x2 = wo
+            w = wo - x
+        
+        if x < 0:                       
+            x3 = -x
+            x = 0 
+        
+        y2 = y + h
+        
+        if y2 >= ho:
+            y2 = ho
+            h = ho - y
+            
+        if y < 0:            
+            y3 = -y
+            y = 0            
+        
+        
                 
-        output[y:y+h, x:x+w] = img_to_overlay_t[0:h, 0:w]
+        output[y:y2, x:x2] = img_to_overlay_t[y3:h, x3:w]
         output = cv2.addWeighted(overlay, alpha, output, 1 - alpha, 0, output)
             
         return output
