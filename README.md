@@ -27,7 +27,22 @@ We will also present an more precise approach using official Ground Control Poin
 ## Usage: ##
 
 <p align="center">
-  <img src="/images/gui.png" width="800" align="middle">
+  <img src="/images/choose_transpa.png" width="800" align="middle">
+</p>
+
+<p align="center">
+  <img src="/images/adjust_1.png" width="275" align="middle">
+  <img src="/images/adjust_2.png" width="275" align="middle">
+  <img src="/images/adjust_3.png" width="275" align="middle">
+</p>
+<p align="center">
+  <img src="/images/draw_points_1.png" width="275" align="middle">
+  <img src="/images/draw_points_2.png" width="275" align="middle">
+  <img src="/images/draw_points_3.png" width="275" align="middle">
+</p>
+
+<p align="center">
+  <img src="/images/result_1.png" width="800" align="middle">
 </p>
 
 ## Authors
