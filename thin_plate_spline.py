@@ -59,23 +59,36 @@ class App(object):
         comboExample.pack(side="top", padx="10", pady="5")
         
           
-        btn1 = Button(self.root, text="1. Select images \n(perspective image and \nreference map image)", command=self.open_image)
+        btn1 = Button(self.root, 
+                      text="1. Select images \n(perspective image and \nreference map image)", 
+                      command=self.open_image)
         btn1.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
        
         labelTop = Label(self.root,
                          text="2. Set Points \n (click on the image)")
         labelTop.pack(side="top", padx="10", pady="5")
         
-        btn8 = Button(self.root, text="3. Do TPS transformation \n and warping", command=self.do_tps_trans_and_warp)
+        btn8 = Button(self.root, 
+                      text="3. Do TPS transformation \n and warping", 
+                      command=self.do_tps_trans_and_warp)
+        btn8.pack(side="top", 
+                  fill="both", 
+                  expand="yes", 
+                  padx="10", 
+                  pady="5")
+        
+        btn8 = Button(self.root, 
+                      text="4. Save transformation matrix", 
+                      command=self.save_image)
         btn8.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
         
-        btn8 = Button(self.root, text="4. Save transformation matrix", command=self.save_image)
+        btn8 = Button(self.root, text="5. Open tracking result \n files to transform", 
+                      command=self.save_image)
         btn8.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
         
-        btn8 = Button(self.root, text="5. Open tracking result \n files to transform", command=self.save_image)
-        btn8.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
-        
-        btn8 = Button(self.root, text="6. Transform tracking result \n ( (x,y) to (lat, long) ) \n and save csv", command=self.save_image)
+        btn8 = Button(self.root, 
+                      text="6. Transform tracking result \n ( (x,y) to (lat, long) ) \n and save csv", 
+                      command=self.save_image)
         btn8.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
                 
         self.root.protocol("WM_DELETE_WINDOW", App.on_closing)
@@ -170,19 +183,33 @@ class App(object):
                         
             try:                    
                 trackbar_name = 'Alpha x %d' % 100
-                cv2.createTrackbar(trackbar_name, 'image' , int(self.alpha * 100), 100, self.on_trackbar_alpha)
+                cv2.createTrackbar(trackbar_name, 'image' , 
+                                   int(self.alpha * 100), 
+                                   100, 
+                                   self.on_trackbar_alpha)
                 
                 trackbar_name2 = 'Width x %d' % 100
-                cv2.createTrackbar(trackbar_name2, 'image' , self.scale_width, 500, self.on_trackbar_size)
+                cv2.createTrackbar(trackbar_name2, 'image' , 
+                                   self.scale_width, 
+                                   500, 
+                                   self.on_trackbar_size)
                 
                 trackbar_name3 = 'Rotate x %d' % 100
-                cv2.createTrackbar(trackbar_name3, 'image' , self.rotate_grade, 360, self.on_trackbar_rotate)
+                cv2.createTrackbar(trackbar_name3, 'image' , 
+                                   self.rotate_grade, 360, 
+                                   self.on_trackbar_rotate)
 
                 trackbar_name4 = 'Move x %d' % 100
-                cv2.createTrackbar(trackbar_name4, 'image' , self.move_x, self.ref_image.shape[1], self.on_trackbar_move_x)
+                cv2.createTrackbar(trackbar_name4, 'image' , 
+                                   self.move_x, 
+                                   self.ref_image.shape[1], 
+                                   self.on_trackbar_move_x)
                 
                 trackbar_name5 = 'Move y %d' % 100
-                cv2.createTrackbar(trackbar_name5, 'image' , self.move_y, self.ref_image.shape[0], self.on_trackbar_move_y)                                   
+                cv2.createTrackbar(trackbar_name5, 'image' , 
+                                   self.move_y, 
+                                   self.ref_image.shape[0], 
+                                   self.on_trackbar_move_y)                                   
                 
                 self.draw()
                 
@@ -277,11 +304,9 @@ class App(object):
                 outputjpgfile = filename
 
                 try:
-
                     cv2.imwrite(outputjpgfile, self.image)
 
                 except Exception:
-
                     e = sys.exc_info()[0]
                     messagebox.showinfo("Error saving file", e)
                     raise
@@ -294,7 +319,10 @@ class App(object):
         w = int(round(self.ref_image.shape[1] * (self.scale_width / 100), 0))
         ref_image = imutils.resize(self.ref_image, w)
         ref_image = imutils.rotate(ref_image, angle=int(self.rotate_grade))                    
-        image = App.overlay_transparent(self.image, ref_image, self.move_x - int(ref_image.shape[1] / 2), self.move_y - int(ref_image.shape[0] / 2), alpha=self.alpha)        
+        image = App.overlay_transparent(self.image, ref_image, 
+                                        self.move_x - int(ref_image.shape[1] / 2), 
+                                        self.move_y - int(ref_image.shape[0] / 2), 
+                                        alpha=self.alpha)        
                             
         cv2.imshow("image", image)
 
@@ -331,7 +359,6 @@ class App(object):
         output = cv2.addWeighted(overlay, alpha, output, 1 - alpha, 0, output)
             
         return output
-    
      
     def on_trackbar_alpha(self, val):
         
