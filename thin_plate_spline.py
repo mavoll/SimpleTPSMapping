@@ -307,9 +307,9 @@ class App(object):
         h, w, _ = img_to_overlay_t.shape  
         
         x3 = 0
-        y3 = 0
-         
+        y3 = 0         
         x2 = w + x
+        y2 = y + h
         
         if x2 >= wo:
             x2 = wo
@@ -319,17 +319,13 @@ class App(object):
             x3 = -x
             x = 0 
         
-        y2 = y + h
-        
         if y2 >= ho:
             y2 = ho
             h = ho - y
             
         if y < 0:            
             y3 = -y
-            y = 0            
-        
-        
+            y = 0   
                 
         output[y:y2, x:x2] = img_to_overlay_t[y3:h, x3:w]
         output = cv2.addWeighted(overlay, alpha, output, 1 - alpha, 0, output)
