@@ -1,16 +1,22 @@
 import cv2
 import imutils
 from threading import Thread
+from collections import deque
+import colorsys
+import csv
 
 import numpy as np
 import sys
 from tkinter import Button
 from tkinter.filedialog import askopenfilename
+from tkinter.filedialog import askopenfilenames
 from tkinter.filedialog import asksaveasfilename
 from tkinter import Label
 from tkinter import messagebox
 from tkinter import Tk
 from tkinter import ttk
+
+import pairs_window
 
 class App(object):
   
@@ -33,6 +39,8 @@ class App(object):
         self.refPt = []
         self.inter_line_counter = 0
         
+        self.pairs_window = None
+        
     def run(self):
 
         self.root.wm_title("Select actions:")
@@ -41,7 +49,7 @@ class App(object):
         self.root.attributes("-topmost", True)
         
         labelTop = Label(self.root,
-                         text="Choose image scale factor\n and press '1. Select an image' ")
+                         text="Choose image scale factor:")
         labelTop.pack(side="top", padx="10", pady="5")
         
         comboExample = ttk.Combobox(self.root,
@@ -63,33 +71,46 @@ class App(object):
                       text="1. Select images \n(perspective image and \nreference map image)", 
                       command=self.open_image)
         btn1.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
+        
+        labelTop = Label(self.root,
+                         text="2. Adjust the reference image \n using the sliders and \n fit it into background image")
+        labelTop.pack(side="top", padx="10", pady="5")
        
         labelTop = Label(self.root,
-                         text="2. Set Points \n (click on the image)")
+                         text="3. Set pairs of points \n (using the mouse) \n \n or")
         labelTop.pack(side="top", padx="10", pady="5")
         
-        btn8 = Button(self.root, 
-                      text="3. Do TPS transformation \n and warping", 
+        btn11 = Button(self.root, 
+                      text="3. Open point pairs from file", 
+                      command=self.open_image)
+        btn11.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
+        
+        btn81 = Button(self.root, 
+                      text="4. Perform TPS \n transformation and warping", 
                       command=self.do_tps_trans_and_warp)
-        btn8.pack(side="top", 
+        btn81.pack(side="top", 
                   fill="both", 
                   expand="yes", 
                   padx="10", 
                   pady="5")
         
-        btn8 = Button(self.root, 
-                      text="4. Save transformation matrix", 
-                      command=self.save_image)
-        btn8.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
+        btn84 = Button(self.root, 
+                      text="5. Enter reference coordinates \n (lat, long)", 
+                      command=self.do_tps_trans_and_warp)
+        btn84.pack(side="top", 
+                  fill="both", 
+                  expand="yes", 
+                  padx="10", 
+                  pady="5")
+                
+        btn82 = Button(self.root, text="6. Open tracking result \n files to transform", 
+                      command=self.open_tracks)
+        btn82.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
         
-        btn8 = Button(self.root, text="5. Open tracking result \n files to transform", 
+        btn83 = Button(self.root, 
+                      text="7. Transform tracking results \n ( (x,y) to (lat, long) ) \n and save them to csv file", 
                       command=self.save_image)
-        btn8.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
-        
-        btn8 = Button(self.root, 
-                      text="6. Transform tracking result \n ( (x,y) to (lat, long) ) \n and save csv", 
-                      command=self.save_image)
-        btn8.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
+        btn83.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
                 
         self.root.protocol("WM_DELETE_WINDOW", App.on_closing)
         self.root.mainloop()
@@ -121,9 +142,9 @@ class App(object):
         
             self.pixel_points = []
             self.fix_points = []
-            self.num_selected_points = 0
             self.refPt = []
             self.inter_line_counter = 0
+            self.pairs_window = None
             
             self.alpha = 0.5
             self.rotate_grade = 0
@@ -166,6 +187,34 @@ class App(object):
             self.move_x = int(self.ref_image.shape[1] / 2)
             self.move_y = int(self.ref_image.shape[0] / 2)
 
+    def open_tracks(self):
+
+        if self.image is not None:
+
+            options = {}
+            options['filetypes'] = [('Text file', '.txt'),
+                                    ('Comma separated', '.csv'), ('All files', '*')]
+            options['defaultextension'] = "txt"
+            options['title'] = "Choose tracking results file(s)"
+
+            mes = "If you choose more than one tracking file, make sure that those\
+                files are named in a manner that make them sortable! It is important\
+                in order to associate all frames with its correct creation time!"
+            messagebox.showinfo("Caution!", mes)
+
+            filenames = askopenfilenames(**options)
+
+            if filenames:
+
+                lst = list(filenames)
+                self.path_to_tracking_res = sorted(lst)
+                self.result_lines = []
+                
+                self.draw_all_tracks()
+
+        else:
+            messagebox.showinfo("No image selected", "Please select an image first!")
+            
     def show_image(self):
 
         cv2.namedWindow('image', cv2.WINDOW_AUTOSIZE)
@@ -232,19 +281,17 @@ class App(object):
 
         elif event == cv2.EVENT_LBUTTONUP:
             if self.refPt[-1] != (x, y):
-                self.refPt.append((x, y))
-                self.image = self.put_points_and_line_on_image(self.image,
-                    self.refPt[self.inter_line_counter], self.refPt[self.inter_line_counter + 1])
-                #cv2.imshow("image", image)
-                self.draw()
+                self.refPt.append((x, y))                
                 self.pixel_points.append(self.refPt[self.inter_line_counter])
                 self.fix_points.append(self.refPt[self.inter_line_counter + 1])
                 self.inter_line_counter += 2
-                self.num_selected_points += 1
+                self.draw()
+                self.open_update_pairs_window()
             else:
                 self.refPt.pop()
+                self.draw()
 
-    def put_points_and_line_on_image(self, img, point1, point2):
+    def put_points_and_line_on_image(self, img, point1, point2, pair_id):
 
         cv2.line(img, point1, point2, (0, 255, 0), 2)
         cv2.putText(img,
@@ -261,6 +308,15 @@ class App(object):
                     0.3,
                     (0, 0, 255),
                     1)
+
+        tmpd = App.get_line_mid_point(point1, point2)
+        cv2.putText(img,
+                    str(pair_id),
+                    (int(tmpd[0]) - 20, int(tmpd[1])),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 0, 255),
+                    2)
         
         return img
                         
@@ -285,7 +341,14 @@ class App(object):
         
         else:
             messagebox.showinfo("Not enough points!", "Please set at least 3 point pairs!")
+    
+    def open_update_pairs_window(self):
         
+        if self.pairs_window is None:            
+            self.pairs_window = pairs_window.PairsWindow(self)
+        
+        else:
+            self.pairs_window.update_gui()
                        
     def save_image(self):
 
@@ -322,9 +385,70 @@ class App(object):
         image = App.overlay_transparent(self.image, ref_image, 
                                         self.move_x - int(ref_image.shape[1] / 2), 
                                         self.move_y - int(ref_image.shape[0] / 2), 
-                                        alpha=self.alpha)        
+                                        alpha=self.alpha)
+        
+        x = 0
+        x2 = 0
+        while x < self.inter_line_counter - 1:
+            image = self.put_points_and_line_on_image(image,
+                        self.refPt[x], self.refPt[x + 1], x2)
+            x += 2
+            x2 += 1
                             
         cv2.imshow("image", image)
+        
+    def draw_all_tracks(self):
+
+        if self.path_to_tracking_res:
+
+            for i in range(0, len(self.path_to_tracking_res)):
+
+                track_buffer_dict = {}
+
+                with open(self.path_to_tracking_res[i], 'r') as csv_file:
+
+                    csv_reader = csv.reader(csv_file, delimiter=',')
+                    image = self.image.copy()
+
+                    try:
+
+                        for row in csv_reader:
+
+                            track_id = int(row[1])                            
+                            #track_class = int(float(row[7]))
+                            
+                            track_color = App.create_unique_color_int(track_id)
+                            cy = (float(row[3]) + float(row[5])) * self.scale_factor
+                            cx = (float(row[2]) + (float(row[4]) / 2)) * self.scale_factor
+                            center = (int(cx), int(cy))
+
+                            if track_id not in track_buffer_dict:
+                                pts = deque([], maxlen=None)
+                            else:
+                                pts = track_buffer_dict[track_id]
+
+                            if pts:
+                                last_center = pts[-1]  # .pop()
+                            else:
+                                pts.append(center)
+                                track_buffer_dict[track_id] = pts
+                                continue
+
+                            cv2.line(image, last_center, center, track_color, 1)
+
+                            pts.append(center)
+                            track_buffer_dict[track_id] = pts
+
+                    except Exception:
+
+                        e = sys.exc_info()[0]
+                        messagebox.showinfo("Error parsing tracking file", e)
+                        raise
+
+            cv2.imshow('image', image)
+
+        else:
+            messagebox.showinfo("No tracking file chosen", "Please select an tracking file first!")
 
     def overlay_transparent(background_img, img_to_overlay_t, x, y, overlay_size=None, alpha=0.1):
         
@@ -359,6 +483,17 @@ class App(object):
         output = cv2.addWeighted(overlay, alpha, output, 1 - alpha, 0, output)
             
         return output
+        
+    def get_line_mid_point(point1, point2):
+
+        return ((point1[0] + point2[0]) / 2, (point1[1] + point2[1]) / 2)
+    
+    def create_unique_color_int(tag, hue_step=0.41):
+
+        h, v, = (tag * hue_step) % 1, 1. - (int(tag * hue_step) % 4) / 5.
+        r, g, b = colorsys.hsv_to_rgb(h, 1., v)
+
+        return int(255 * r), int(255 * g), int(255 * b)
      
     def on_trackbar_alpha(self, val):
         
