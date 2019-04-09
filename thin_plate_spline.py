@@ -15,6 +15,9 @@ from tkinter import Label
 from tkinter import messagebox
 from tkinter import Tk
 from tkinter import ttk
+from tkinter import Toplevel
+from tkinter import Entry
+from tkinter import END
 
 import pairs_window
 
@@ -40,6 +43,13 @@ class App(object):
         self.inter_line_counter = 0
         
         self.pairs_window = None
+        
+        self.lat_top_left = 53.549933
+        self.long_top_left = 9.995458
+        self.lat_bottom_right = 53.548746
+        self.long_bottom_right = 9.998395
+        
+        self.tracks_by_files = []
         
     def run(self):
 
@@ -96,7 +106,7 @@ class App(object):
         
         btn84 = Button(self.root, 
                       text="5. Enter reference coordinates \n (lat, long)", 
-                      command=self.do_tps_trans_and_warp)
+                      command=self.ask_for_ref_coordinates)
         btn84.pack(side="top", 
                   fill="both", 
                   expand="yes", 
@@ -149,6 +159,8 @@ class App(object):
             self.alpha = 0.5
             self.rotate_grade = 0
             self.scale_width = 100
+            
+            self.tracks_by_files = []
             
             self.open_ref_image()
             
@@ -208,8 +220,7 @@ class App(object):
 
                 lst = list(filenames)
                 self.path_to_tracking_res = sorted(lst)
-                self.result_lines = []
-                
+                self.tracks_by_files = []     
                 self.draw_all_tracks()
 
         else:
@@ -336,13 +347,69 @@ class App(object):
                                         
             tps_transformer.estimateTransformation(pixel_points, fix_points, matches)        
             ret, output = tps_transformer.applyTransformation(pixel_points)
-            image = tps_transformer.warpImage(self.image) #, cv2.INTER_CUBIC, cv2.BACK_WARP)
+            
+            #image = tps_transformer.warpImage(self.image, cv2.INTER_LINEAR)
+            
+            #image = np.zeros((self.image.shape[0],self.image.shape[1],1), np.uint8)
+            image = self.image.copy()
+            for i in range(0, int(self.image.shape[1] / 10) + 1):           
+                cv2.line(image, (10 * i, 0), (10 * i, self.image.shape[0]), (255,255,255), 1)
+                
+            for i in range(0, int(self.image.shape[0] / 10) + 1):           
+                cv2.line(image, (0, 10 * i), (self.image.shape[1], 10 * i), (255,255,255), 1)
+                
+            image = tps_transformer.warpImage(image, cv2.INTER_LINEAR)
+            print(image)
+            
+#            INTER_NEAREST 	
+#            nearest neighbor interpolation
+#            
+#            INTER_LINEAR 	
+#            bilinear interpolation
+#            
+#            INTER_CUBIC 	
+#            bicubic interpolation
+#            
+#            INTER_AREA 	
+#            resampling using pixel area relation.
+#            
+#            It may be a preferred method for image decimation, as it gives moire'-free results. But when the image is zoomed, it is similar to the INTER_NEAREST method.
+#            
+#            INTER_LANCZOS4 	
+#            Lanczos interpolation over 8x8 neighborhood.
+#            
+#            INTER_LINEAR_EXACT 	
+#            Bit exact bilinear interpolation.
+#            
+#            INTER_MAX 	
+#            mask for interpolation codes
+#            
+#            WARP_FILL_OUTLIERS 	
+#            flag, fills all of the destination image pixels.
+#            
+#            If some of them correspond to outliers in the source image, they are set to zero
+#            
+#            WARP_INVERSE_MAP 	
+#            flag, inverse transformation
+#            
+#            For example, linearPolar or logPolar transforms:
+#            
+#            flag is not set: dst(ρ,ϕ)=src(x,y)
+#            flag is set: dst(x,y)=src(ρ,ϕ)
             
             cv2.imshow("image", image)
         
         else:
             messagebox.showinfo("Not enough points!", "Please set at least 3 point pairs!")
     
+    def transform_to_geo(self):
+        
+        tracks_by_files_transformed = self.tracks_by_files.copy()
+        
+        
+        self.draw_tracks(self.ref_image, tracks_by_files_transformed)
+        App.save_tracks(tracks_by_files_transformed)
+        
     def open_update_pairs_window(self):
         
         if self.pairs_window is None:            
@@ -400,9 +467,29 @@ class App(object):
                     csv_writer.writerow(self.refPt)                    
         else:
             messagebox.showinfo("No image selected", "Please select an image first!")
+        
+    def save_tracks(tracks_by_files_transformed):
+        
+        tracks_by_files_transformed
+        
+        try:
+            for (filename, rows) in tracks_by_files_transformed:
+            
+                idx = len(filename) - 4
+                res_filename = filename[:idx] + '_transformed' + filename[idx:]
+                
+                with open(res_filename, 'w') as txtfile:
+                    wr = csv.writer(txtfile, lineterminator='\n')
+                    
+                    for row in rows:
+                            
+                        wr.writerow(row)
+                    
+        except Exception:
 
-    def transform_to_geo(self):
-        return
+            e = sys.exc_info()[0]
+            messagebox.showinfo("Error saving tracking boxes", e)
+            raise
     
     def draw(self):        
         
@@ -427,11 +514,13 @@ class App(object):
         
     def draw_all_tracks(self):
 
+        #should use self.draw_tracks and an additional load_tracks function. 
         if self.path_to_tracking_res:
 
             for i in range(0, len(self.path_to_tracking_res)):
 
                 track_buffer_dict = {}
+                rows = []
 
                 with open(self.path_to_tracking_res[i], 'r') as csv_file:
 
@@ -442,6 +531,7 @@ class App(object):
 
                         for row in csv_reader:
 
+                            rows.append(row)
                             track_id = int(row[1])                            
                             #track_class = int(float(row[7]))
                             
@@ -456,7 +546,7 @@ class App(object):
                                 pts = track_buffer_dict[track_id]
 
                             if pts:
-                                last_center = pts[-1]  # .pop()
+                                last_center = pts[-1]
                             else:
                                 pts.append(center)
                                 track_buffer_dict[track_id] = pts
@@ -466,6 +556,8 @@ class App(object):
 
                             pts.append(center)
                             track_buffer_dict[track_id] = pts
+                            
+                        self.tracks_by_files.append((str(self.path_to_tracking_res[i]), rows.copy()))
 
                     except Exception:
 
@@ -477,6 +569,51 @@ class App(object):
 
         else:
             messagebox.showinfo("No tracking file chosen", "Please select an tracking file first!")
+
+    def draw_tracks(self, image, tracks_by_files_transformed):
+        
+        w = int(round(self.ref_image.shape[1] * (self.scale_width / 100), 0))
+        ref_image = imutils.resize(self.ref_image, w)
+        ref_image = imutils.rotate(ref_image, angle=int(self.rotate_grade))
+        image = App.overlay_transparent(image, ref_image, 
+                                        self.move_x - int(ref_image.shape[1] / 2), 
+                                        self.move_y - int(ref_image.shape[0] / 2), 
+                                        alpha=0.1)
+        
+        for (filename, rows) in tracks_by_files_transformed:  
+
+            track_buffer_dict = {}
+
+            for row in rows:          
+
+                    track_id = int(row[1])                            
+                    #track_class = int(float(row[7]))
+                    
+                    track_color = App.create_unique_color_int(track_id)
+                    cy = (float(row[3]) + float(row[5])) * self.scale_factor
+                    cx = (float(row[2]) + (float(row[4]) / 2)) * self.scale_factor
+                    center = (int(cx), int(cy))
+
+                    if track_id not in track_buffer_dict:
+                        pts = deque([], maxlen=None)
+                    else:
+                        pts = track_buffer_dict[track_id]
+
+                    if pts:
+                        last_center = pts[-1]
+                    else:
+                        pts.append(center)
+                        track_buffer_dict[track_id] = pts
+                        continue
+
+                    cv2.line(image, last_center, center, track_color, 1)
+
+                    pts.append(center)
+                    track_buffer_dict[track_id] = pts
+                    
+            #self.tracks_by_files.append((str(filename), rows.copy()))
+
+        cv2.imshow('image', image)
 
     def overlay_transparent(background_img, img_to_overlay_t, x, y, overlay_size=None, alpha=0.1):
         
@@ -511,6 +648,56 @@ class App(object):
         output = cv2.addWeighted(overlay, alpha, output, 1 - alpha, 0, output)
             
         return output
+    
+    def ask_for_ref_coordinates(self):
+
+        window = Toplevel(self.root)
+        window.wm_title("Enter ref coordinates")
+        window.resizable(width=False, height=False)
+        window.geometry('{}x{}'.format(250, 300))
+        window.attributes('-topmost', True)
+        
+        label1 = Label(window, text="lat \n (top left corner of rectangle)")
+        label1.pack(side="top", padx="10", pady="5")
+        e2 = Entry(window)
+        e2.config(width=10)
+        e2.insert(END, self.lat_top_left)
+        e2.pack(side="top", padx="10", pady="5")
+        
+        label2 = Label(window, text="long \n (top left corner of rectangle)")
+        label2.pack(side="top", padx="10", pady="5")
+        e3 = Entry(window)
+        e3.config(width=10)
+        e3.insert(END, self.long_top_left)
+        e3.pack(side="top", padx="10", pady="5")
+        
+        label3 = Label(window, text="lat \n (bottom right corner of rectangle)")
+        label3.pack(side="top", padx="10", pady="5")
+        e4 = Entry(window)
+        e4.config(width=10)
+        e4.insert(END, self.lat_bottom_right)
+        e4.pack(side="top", padx="10", pady="5")
+        
+        label4 = Label(window, text="long \n (bottom right corner of rectangle)")
+        label4.pack(side="top", padx="10", pady="5")
+        e5 = Entry(window)
+        e5.config(width=10)
+        e5.insert(END, self.long_bottom_right)
+        e5.pack(side="top", padx="10", pady="5")
+        
+        btn1 = Button(window, text="Set", command=lambda *args: self.set_reference_coordinates(e2.get(), e3.get(), e4.get(), e5.get(), window))
+        btn1.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
+        
+        self.root.wait_window(window)
+    
+    def set_reference_coordinates(self, lat_top_left, long_top_left, lat_bottom_right, long_bottom_right, window):
+        
+        self.lat_top_left = lat_top_left
+        self.long_top_left = long_top_left
+        self.lat_bottom_right = lat_bottom_right
+        self.long_bottom_right = long_bottom_right
+            
+        window.destroy()
         
     def get_line_mid_point(point1, point2):
 
