@@ -82,7 +82,7 @@ class App(object):
         
         btn11 = Button(self.root, 
                       text="3. Open point pairs from file", 
-                      command=self.open_image)
+                      command=self.open_pairs)
         btn11.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
         
         btn81 = Button(self.root, 
@@ -109,7 +109,7 @@ class App(object):
         
         btn83 = Button(self.root, 
                       text="7. Transform tracking results \n ( (x,y) to (lat, long) ) \n and save them to csv file", 
-                      command=self.save_image)
+                      command=self.transform_to_geo)
         btn83.pack(side="top", fill="both", expand="yes", padx="10", pady="5")
                 
         self.root.protocol("WM_DELETE_WINDOW", App.on_closing)
@@ -281,6 +281,7 @@ class App(object):
 
         elif event == cv2.EVENT_LBUTTONUP:
             if self.refPt[-1] != (x, y):
+                #More lists than needed but too lazy to change it :)
                 self.refPt.append((x, y))                
                 self.pixel_points.append(self.refPt[self.inter_line_counter])
                 self.fix_points.append(self.refPt[self.inter_line_counter + 1])
@@ -349,43 +350,63 @@ class App(object):
         
         else:
             self.pairs_window.update_gui()
+            
+    def open_pairs(self):
+        
+        if self.image is not None:
+
+            options = {}
+            options['filetypes'] = [('Text file', '.txt'),
+                                    ('Comma separated', '.csv'), ('All files', '*')]
+            options['defaultextension'] = "txt"
+            options['title'] = "Choose pairs file"
+
+            filenames = askopenfilename(**options)
+
+            if filenames:
+                with open(filenames, 'r') as csv_file:
+
+                    csv_reader = csv.reader(csv_file, delimiter=',')
+                    refPt = list(csv_reader)
+                    self.refPt = [eval(refPt[0][i]) for i in range(0, len(refPt[0]))]
+                
+                #More lists than needed but too lazy to change it :)
+                self.pixel_points = self.refPt[0::2]
+                self.fix_points = self.refPt[1::2]                
+                self.inter_line_counter = len(self.refPt)
+                
+                self.open_update_pairs_window()
+                self.draw()
+                    
+        else:
+            messagebox.showinfo("No image selected", "Please select an image first!")
                        
-    def save_image(self):
+    def save_pairs(self):
 
         if self.image is not None:
 
             options = {}
-            options['filetypes'] = [('Image file', '.jpg'), ('Image file', '.jpeg')]
-            options['defaultextension'] = "jpg"
-            options['initialfile'] = "counting_result_image.jpg"
-            options['title'] = "Where to save?"
+            options['filetypes'] = [('Text file', '.txt'),
+                                    ('Comma separated', '.csv'), ('All files', '*')]
+            options['defaultextension'] = "txt"
+            options['title'] = "Choose pairs file"
 
-            filename = asksaveasfilename(**options)
+            filenames = asksaveasfilename(**options)
 
-            if filename:
+            if filenames:
+                with open(filenames, 'w') as csv_file:
 
-                outputjpgfile = filename
-
-                try:
-                    cv2.imwrite(outputjpgfile, self.image)
-
-                except Exception:
-                    e = sys.exc_info()[0]
-                    messagebox.showinfo("Error saving file", e)
-                    raise
-
+                    csv_writer = csv.writer(csv_file, delimiter=',')
+                    csv_writer.writerow(self.refPt)                    
         else:
             messagebox.showinfo("No image selected", "Please select an image first!")
 
+    def transform_to_geo(self):
+        return
+    
     def draw(self):        
         
-        w = int(round(self.ref_image.shape[1] * (self.scale_width / 100), 0))
-        ref_image = imutils.resize(self.ref_image, w)
-        ref_image = imutils.rotate(ref_image, angle=int(self.rotate_grade))                    
-        image = App.overlay_transparent(self.image, ref_image, 
-                                        self.move_x - int(ref_image.shape[1] / 2), 
-                                        self.move_y - int(ref_image.shape[0] / 2), 
-                                        alpha=self.alpha)
+        image = self.image.copy()
         
         x = 0
         x2 = 0
@@ -394,7 +415,14 @@ class App(object):
                         self.refPt[x], self.refPt[x + 1], x2)
             x += 2
             x2 += 1
-                            
+        
+        w = int(round(self.ref_image.shape[1] * (self.scale_width / 100), 0))
+        ref_image = imutils.resize(self.ref_image, w)
+        ref_image = imutils.rotate(ref_image, angle=int(self.rotate_grade))                    
+        image = App.overlay_transparent(image, ref_image, 
+                                        self.move_x - int(ref_image.shape[1] / 2), 
+                                        self.move_y - int(ref_image.shape[0] / 2), 
+                                        alpha=self.alpha)
         cv2.imshow("image", image)
         
     def draw_all_tracks(self):
