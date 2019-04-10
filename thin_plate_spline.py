@@ -51,11 +51,21 @@ class App(object):
         
         self.tracks_by_files = []
         
+        self.warp_methods = {"INTER_LINEAR": cv2.INTER_LINEAR,
+                             "INTER_NEAREST": cv2.INTER_NEAREST,
+                             "INTER_CUBIC": cv2.INTER_CUBIC,
+                             "INTER_AREA": cv2.INTER_AREA,
+                             "INTER_LANCZOS4": cv2.INTER_LANCZOS4
+                             }
+        self.warp_method = cv2.INTER_AREA
+        
+        self.tps_transformer = None
+        
     def run(self):
 
         self.root.wm_title("Select actions:")
         self.root.resizable(width=False, height=False)
-        self.root.geometry('{}x{}'.format(250, 525))
+        self.root.geometry('{}x{}'.format(250, 550))
         self.root.attributes("-topmost", True)
         
         labelTop = Label(self.root,
@@ -104,6 +114,18 @@ class App(object):
                   padx="10", 
                   pady="5")
         
+        labelMethod = Label(self.root,
+                         text="Warping method:")
+        labelMethod.pack(side="top", padx="10", pady="5")
+        
+        comboExample7 = ttk.Combobox(self.root,
+                                    values=list(self.warp_methods))
+
+        comboExample7.current(0)
+        comboExample7.state(['readonly'])
+        comboExample7.bind("<<ComboboxSelected>>", self.set_warping_method)
+        comboExample7.pack(side="top", padx="10", pady="5")        
+        
         btn84 = Button(self.root, 
                       text="5. Enter reference coordinates \n (lat, long)", 
                       command=self.ask_for_ref_coordinates)
@@ -132,6 +154,11 @@ class App(object):
 
         if event is not None:
             self.scale_factor = float(event.widget.get())
+            
+    def set_warping_method(self, event=None):
+
+        if event is not None:
+            self.warp_method = self.warp_methods[str(event.widget.get())]            
 
     def open_image(self):
 
@@ -145,16 +172,17 @@ class App(object):
         if filename:
             
             self.image = cv2.imread(filename)
+            self.clone = self.image.copy()
             h = int(self.image.shape[0] * self.scale_factor)
             w = int(self.image.shape[1] * self.scale_factor)
             self.image = cv2.resize(self.image, (w, h))
-            self.clone = self.image.copy()
         
             self.pixel_points = []
             self.fix_points = []
             self.refPt = []
             self.inter_line_counter = 0
             self.pairs_window = None
+            self.tps_transformer = None
             
             self.alpha = 0.5
             self.rotate_grade = 0
@@ -343,72 +371,77 @@ class App(object):
             pixel_points = np.float32(self.pixel_points).reshape(1, -1, 2)
             fix_points = np.float32(self.fix_points).reshape(1, -1, 2)
             
-            tps_transformer = cv2.createThinPlateSplineShapeTransformer(0)
-                                        
-            tps_transformer.estimateTransformation(pixel_points, fix_points, matches)        
-            ret, output = tps_transformer.applyTransformation(pixel_points)
+            if self.tps_transformer is None:
+                self.tps_transformer = cv2.createThinPlateSplineShapeTransformer(0)                                        
+            self.tps_transformer.estimateTransformation(pixel_points, fix_points, matches)        
+            ret, output = self.tps_transformer.applyTransformation(pixel_points)            
+            image = self.tps_transformer.warpImage(self.image,  flags=self.warp_method, borderMode=cv2.BORDER_CONSTANT)
             
-            #image = tps_transformer.warpImage(self.image, cv2.INTER_LINEAR)
+            cv2.imshow('image',image)
             
-            #image = np.zeros((self.image.shape[0],self.image.shape[1],1), np.uint8)
-            image = self.image.copy()
+            trans = np.zeros((self.image.shape[0],self.image.shape[1],1), np.uint8)
             for i in range(0, int(self.image.shape[1] / 10) + 1):           
-                cv2.line(image, (10 * i, 0), (10 * i, self.image.shape[0]), (255,255,255), 1)
-                
+                cv2.line(trans, (10 * i, 0), (10 * i, self.image.shape[0]), (255,255,255), 1)                
             for i in range(0, int(self.image.shape[0] / 10) + 1):           
-                cv2.line(image, (0, 10 * i), (self.image.shape[1], 10 * i), (255,255,255), 1)
-                
-            image = tps_transformer.warpImage(image, cv2.INTER_LINEAR)
-            print(image)
+                cv2.line(trans, (0, 10 * i), (self.image.shape[1], 10 * i), (255,255,255), 1)                
+            trans = self.tps_transformer.warpImage(trans, flags=self.warp_method, borderMode=cv2.BORDER_CONSTANT)            
             
-#            INTER_NEAREST 	
-#            nearest neighbor interpolation
-#            
-#            INTER_LINEAR 	
-#            bilinear interpolation
-#            
-#            INTER_CUBIC 	
-#            bicubic interpolation
-#            
-#            INTER_AREA 	
-#            resampling using pixel area relation.
-#            
-#            It may be a preferred method for image decimation, as it gives moire'-free results. But when the image is zoomed, it is similar to the INTER_NEAREST method.
-#            
-#            INTER_LANCZOS4 	
-#            Lanczos interpolation over 8x8 neighborhood.
-#            
-#            INTER_LINEAR_EXACT 	
-#            Bit exact bilinear interpolation.
-#            
-#            INTER_MAX 	
-#            mask for interpolation codes
-#            
-#            WARP_FILL_OUTLIERS 	
-#            flag, fills all of the destination image pixels.
-#            
-#            If some of them correspond to outliers in the source image, they are set to zero
-#            
-#            WARP_INVERSE_MAP 	
-#            flag, inverse transformation
-#            
-#            For example, linearPolar or logPolar transforms:
-#            
-#            flag is not set: dst(ρ,ϕ)=src(x,y)
-#            flag is set: dst(x,y)=src(ρ,ϕ)
-            
-            cv2.imshow("image", image)
-        
+            cv2.imshow('transformation',trans)
+                    
         else:
             messagebox.showinfo("Not enough points!", "Please set at least 3 point pairs!")
     
     def transform_to_geo(self):
         
-        tracks_by_files_transformed = self.tracks_by_files.copy()
+        if self.tracks_by_files is not None:
+            
+            tracks_by_files_transformed = []
+            
+            trans = np.zeros((self.clone.shape[0],self.clone.shape[1],4), np.uint8)
+            
+            for (filename, rows) in self.tracks_by_files:         
+                for row in rows:                    
+                    upper_left_x = int(float(row[2]))
+                    upper_left_y = int(float(row[3]))
+                    
+                    trans.itemset((upper_left_y, upper_left_x, 0), 255)
+                    trans.itemset((upper_left_y, upper_left_x, 1), upper_left_x)
+                    trans.itemset((upper_left_y, upper_left_x, 2), upper_left_y)
+                    trans.itemset((upper_left_y, upper_left_x, 3), upper_left_y)
+            
+            trans = self.tps_transformer.warpImage(trans, flags=self.warp_method, borderMode=cv2.BORDER_CONSTANT)    
+            
+            cv2.imshow('transformation',trans)
         
-        
-        self.draw_tracks(self.ref_image, tracks_by_files_transformed)
-        App.save_tracks(tracks_by_files_transformed)
+#            w = int(round(self.ref_image.shape[1] * (self.scale_width / 100), 0))
+#            ref_image = imutils.resize(self.ref_image, w)
+#            ref_image = imutils.rotate(ref_image, angle=int(self.rotate_grade))
+#            image = App.overlay_transparent(self.image, ref_image, 
+#                                            self.move_x - int(ref_image.shape[1] / 2), 
+#                                            self.move_y - int(ref_image.shape[0] / 2), 
+#                                            alpha=0.1)
+            
+#            for (filename, rows) in self.tracks_by_files:  
+#                
+#                tmp_rows = []
+#    
+#                for row in rows:
+#                    
+#                    upper_left_x = float(row[2])
+#                    upper_left_y = float(row[3])
+#                    
+#                    
+#                    
+#                    row[2] = upper_left_x             
+#                    row[3] = upper_left_y
+#                    tmp_rows.append(row)
+#                    
+#                tracks_by_files_transformed.append( (filename, tmp_rows) )
+#        
+#            self.draw_tracks(self.ref_image, tracks_by_files_transformed)
+#            App.save_tracks(tracks_by_files_transformed)
+        else:
+            messagebox.showinfo("No tracking file!", "Please open tracking files first!")
         
     def open_update_pairs_window(self):
         
